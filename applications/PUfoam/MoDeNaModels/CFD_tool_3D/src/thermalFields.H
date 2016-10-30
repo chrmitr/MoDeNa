@@ -7,12 +7,17 @@ volScalarField thermalConductivity
         mesh,
         IOobject::READ_IF_PRESENT,
         IOobject::AUTO_WRITE
-    ), 
+    ),
     mesh,
     dimensionedScalar("thermalConductivity", dimensionSet(0, 2, -1, 0, 0, 0, 0), 0.024)
    );
 
-volScalarField::DimensionedInternalField XNCOSource
+Switch thermalConductivitySurrogateSwitch
+    (
+        kineticsProperties.lookup("thermalConductivitySurrogateSwitch")
+    );
+
+volScalarField::Internal XNCOSource
 (
     IOobject
     (
@@ -20,7 +25,7 @@ volScalarField::DimensionedInternalField XNCOSource
         runTime.timeName(),
         mesh
     ),
-    mesh,   
+    mesh,
     dimensionedScalar("XNCOSource", dimensionSet(1,-3,-1,0,0,0,0), 0.0)
 );
 
@@ -33,7 +38,7 @@ volScalarField thermalDiff_foam
         mesh,
         IOobject::READ_IF_PRESENT,
         IOobject::AUTO_WRITE
-    ), 
+    ),
     mesh,
     dimensionedScalar("thermalDiff_foam", dimensionSet(0, 2, -1, 0, 0, 0, 0), 4e-5)
 );
@@ -46,7 +51,7 @@ volScalarField thermalDiffusivity
         mesh,
         IOobject::READ_IF_PRESENT,
         IOobject::AUTO_WRITE
-    ), 
+    ),
     mesh,
     dimensionedScalar("thermalDiffusivity", dimensionSet(0, 2, -1, 0, 0, 0, 0), 4e-5)
 );
@@ -72,7 +77,7 @@ volScalarField thermalDiff_gas
         mesh,
         IOobject::READ_IF_PRESENT,
         IOobject::AUTO_WRITE
-    ), 
+    ),
     mesh,
     dimensionedScalar("thermalDiff_gas", dimensionSet(0, 2, -1, 0, 0, 0, 0), 1e-1)
 );

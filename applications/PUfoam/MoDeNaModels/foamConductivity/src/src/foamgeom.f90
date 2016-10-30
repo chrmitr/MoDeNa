@@ -13,7 +13,7 @@ contains
 !> determine all geometric parameters of the foam
 subroutine foam_morpholgy
     integer, parameter :: n=2
-    integer :: info
+    integer :: info,i
     real (dp) :: tol=1e-8_dp
     real (dp), dimension(n) :: x,fvec,diag
     write(*,*) 'Foam morphology:'
@@ -44,9 +44,19 @@ subroutine foam_morpholgy
             dwall=(1-por)*dcell/3.775_dp
             dstrut=0
         else
-            x(1)=dwall
-            x(2)=dstrut
-            call hbrd(fcn_fs,n,x,fvec,epsilon(pi),tol,info,diag)
+            do i=1,10
+                x(1)=dwall*i
+                x(2)=dstrut*i
+                call hbrd(fcn_fs,n,x,fvec,epsilon(pi),tol,info,diag)
+                if (info /= 1) then
+                    write(*,*) 'unable to determine foam morphology &
+                        parameters, hbrd returned',info, 'restarting'
+                    write(mfi,*) 'unable to determine foam morphology &
+                        parameters, hbrd returned',info, 'restarting'
+                else
+                    exit
+                endif
+            enddo
             if (info /= 1) then
                 write(*,*) 'unable to determine foam morphology parameters, &
                     hbrd returned',info
@@ -114,14 +124,15 @@ subroutine foam_morpholgy
         write(mfi,*) 'unknown foam morphology input'
         stop
     end select
+    rhof=(1-por)*rhos
     write(*,'(2x,A,1x,e9.3)') 'porosity:', por
-    write(*,'(2x,A,1x,e9.3,1x,A)') 'foam density:', (1-por)*rho2, 'kg/m^3'
+    write(*,'(2x,A,1x,e9.3,1x,A)') 'foam density:', rhof, 'kg/m^3'
     write(*,'(2x,A,1x,e9.3,1x,A)') 'cell size:', dcell*1e6, 'um'
     write(*,'(2x,A,1x,e9.3,1x,A)') 'wall thickness:', dwall*1e6, 'um'
     write(*,'(2x,A,1x,e9.3)') 'strut content:', fs
     write(*,'(2x,A,1x,e9.3,1x,A)') 'strut diameter:', dstrut*1e6, 'um'
     write(mfi,'(2x,A,1x,e9.3)') 'porosity:', por
-    write(mfi,'(2x,A,1x,e9.3,1x,A)') 'foam density:', (1-por)*rho2, 'kg/m^3'
+    write(mfi,'(2x,A,1x,e9.3,1x,A)') 'foam density:', (1-por)*rhos, 'kg/m^3'
     write(mfi,'(2x,A,1x,e9.3,1x,A)') 'cell size:', dcell*1e6, 'um'
     write(mfi,'(2x,A,1x,e9.3,1x,A)') 'wall thickness:', dwall*1e6, 'um'
     write(mfi,'(2x,A,1x,e9.3)') 'strut content:', fs

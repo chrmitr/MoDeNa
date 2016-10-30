@@ -9,7 +9,7 @@
    o8o        o888o `Y8bod8P' o888bood8P'   `Y8bod8P' o8o        `8  `Y888""8o
 
 Copyright
-    2014-2015 MoDeNa Consortium, All rights reserved.
+    2014-2016 MoDeNa Consortium, All rights reserved.
 
 License
     This file is part of Modena.
@@ -21,8 +21,8 @@ License
 
     Modena is distributed in the hope that it will be useful, but WITHOUT ANY
     WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-    FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-    for more details.
+    FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+    details.
 
     You should have received a copy of the GNU General Public License along
     with Modena.  If not, see <http://www.gnu.org/licenses/>.
@@ -34,7 +34,7 @@ Surrogate function, model definition and backward mapping FireTask for
 Foam conductivity model.
 
 @author    Pavel Ferkl
-@copyright 2014-2015, MoDeNa Project. GNU Public License.
+@copyright 2014-2016, MoDeNa Project. GNU Public License.
 @ingroup   app_aging
 """
 
@@ -43,10 +43,12 @@ from modena import *
 import modena.Strategy as Strategy
 from fireworks.utilities.fw_utilities import explicit_serialize
 from jinja2 import Template
+import json
 import polymerConductivity
 import gasConductivity
 import gasMixtureConductivity
-
+from json import encoder
+encoder.FLOAT_REPR = lambda o: format(o, '.12g')
 
 @explicit_serialize
 class FoamConductivityExactTask(ModenaFireTask):
@@ -64,33 +66,33 @@ class FoamConductivityExactTask(ModenaFireTask):
         xN2 = self['point']['x[N2]']
         xAir = xN2+xO2
         # Write input
-        f = open('foamConductivity.in', 'w')
-        f.write('{0:.6e}\n'.format(temp+1))
-        f.write('{0:.6e}\n'.format(temp-1))
-        f.write('{0:.6e}\t{1:.6e}\t{2:.6e}\n'.format(xCO2,xAir,xCyP))
-        f.write('0.9\n')
-        f.write('0.9\n')
-        f.write('1.2\n')
-        f.write('1.1e3\n')
-        f.write('{0:.6e}\n'.format(eps))
-        f.write('{0:.6e}\n'.format(dcell))
-        f.write('2\n')
-        f.write('0.5e-6\n')
-        f.write('{0:.6e}\n'.format(fstrut))
-        f.write('1e-6\n')
-        f.write('3e-2\n')
-        f.write('200\n')
-        f.write('10000\n')
-        f.write('t\n')
-        f.write('0.2\n')
-        f.write('10\n')
-        f.write('f\n')
-        f.write('PeriodicRVEBoxStruts.vtk\n')
-        f.close()
+        inputs={"upperBoundary": {"temperature": temp+1,"emittance": 0.9}}
+        inputs["lowerBoundary"]={"temperature": temp-1,"emittance": 0.9}
+        inputs["gasComposition"]={"CO2": xCO2,"Air": xAir,"Cyclopentane": xCyP}
+        inputs["gasDensity"]=1.2
+        inputs["solidDensity"]=1.1e3
+        inputs["porosity"]=eps
+        inputs["cellSize"]=dcell
+        inputs["morphologyInput"]=2
+        inputs["wallThickness"]=0.5e-6
+        inputs["strutContent"]=fstrut
+        inputs["strutSize"]=1e-6
+        inputs["foamThickness"]=3e-2
+        inputs["spatialDiscretization"]=200
+        inputs["useWallThicknessDistribution"]=True
+        inputs["wallThicknessStandardDeviation"]=0.2
+        inputs["numberOfGrayBoxes"]=10
+        inputs["numericalEffectiveConductivity"]=False
+        # inputs["structureName"]=
+        inputs["testMode"]=False
+        with open('foamConductivity.json','w') as f:
+            json.dump(inputs, f, indent=4)
         # Execute the detailed model
         # path to **this** file + /src/...
         # will break if distributed computing
-        os.system(os.path.dirname(os.path.abspath(__file__))+'/src/kfoam')
+        ret = os.system(os.path.dirname(os.path.abspath(__file__))+'/src/kfoam')
+        # This call enables backward mapping capabilities
+        self.handleReturnCode(ret)
         # Analyse output
         # os.getcwd() returns the path to the "launcher" directory
         try:
@@ -100,8 +102,8 @@ class FoamConductivityExactTask(ModenaFireTask):
 
         self['point']['kfoam'] = float(FILE.readline())
 
-        os.remove('foamConductivity.in')
-        os.remove('foamConductivity.out')
+        # os.remove('foamConductivity.json')
+        # os.remove('foamConductivity.out')
 
 ## Surrogate function for thermal conductivity of the foam.
 #
@@ -129,26 +131,27 @@ void tcfoam_SM
     double fs,Xs,Xw,X,kappa,kr;
     double kfoam;
     double kgas=gasMixtureConductivity;
+    double kpol=polymer_thermal_conductivity;
 
     fs=alpha*fstrut;
-    Xs=(1+4*kgas/(kgas+polymer_thermal_conductivity))/3.0;
-    Xw=2*(1+kgas/(2*polymer_thermal_conductivity))/3.0;
+    Xs=(1+4*kgas/(kgas+kpol))/3.0;
+    Xw=2*(1+kgas/(2*kpol))/3.0;
     X=(1-fs)*Xw+fs*Xs;
     kappa=4.09*sqrt(1-eps)/dcell;
     kr=16*sigma*pow(T,3)/(3*kappa);
-    kfoam = (kgas*eps+polymer_thermal_conductivity*X*(1-eps))/(eps+(1-eps)*X)+beta*kr;
+    kfoam = (kgas*eps+kpol*X*(1-eps))/(eps+(1-eps)*X)+beta*kr;
 
     outputs[0] = kfoam;
 }
 ''',
     # These are global bounds for the function
     inputs={
-        'eps': {'min': 0, 'max': 1},
+        'eps': {'min': 0, 'max': 0.995},
         'dcell': {'min': 0, 'max': 1e-1},
         'fstrut': {'min': 0, 'max': 1},
         'gasMixtureConductivity': {'min': 0, 'max': 1e-1},
         'polymer_thermal_conductivity': {'min': 0, 'max': 1e0},
-        'T': {'min': 273, 'max': 450},
+        'T': {'min': 273, 'max': 550},
         'x': {'index': gasConductivity.species, 'min': 0, 'max': 1},
     },
     outputs={
@@ -160,42 +163,29 @@ void tcfoam_SM
     },
 )
 
+# When initializing for Foam aging
 # use input file to Foam aging application to initialize with reasonable data.
-fname='foamAging.in'
 try:
-    f = open(os.getcwd()+'/../'+fname,'r')
-except IOError:
-    try:
-        f = open(os.getcwd()+'/'+fname,'r')
-    except IOError:
-        f = open(os.getcwd()+'/example_inputs/'+fname,'r')
-
-a=f.readline()
-a=f.readline()
-a=f.readline()
-a=f.readline()
-a=f.readline()
-a=f.readline()
-T0=float(a.split()[0])
-a=f.readline()
-rhop=float(a.split()[0])
-a=f.readline()
-a=f.readline()
-a=f.readline()
-xAir0=float(a.split()[0])
-xCO20=float(a.split()[1])
-xCyP0=float(a.split()[2])
-a=f.readline()
-a=f.readline()
-a=f.readline()
-dcell0=float(a.split()[0])
-a=f.readline()
-fstrut0=float(a.split()[0])
-a=f.readline()
-rho0=float(a.split()[0])
-f.close()
-eps0=1-rho0/rhop
-
+    with open('foamAging.json','r') as f:
+        inputs=json.load(f)
+        T0=inputs['foamCondition']['conductivityTemperature']
+        rhop=inputs['physicalProperties']['polymerDensity']
+        xAir0=inputs['foamCondition']['initialComposition']['Air']
+        xCO20=inputs['foamCondition']['initialComposition']['CO2']
+        xCyP0=inputs['foamCondition']['initialComposition']['Cyclopentane']
+        dcell0=inputs['morphology']['cellSize']
+        fstrut0=inputs['morphology']['strutContent']
+        rho0=inputs['morphology']['foamDensity']
+        eps0=1-rho0/rhop
+except IOError: # set some dummy values when not initializing
+    eps0=0.96
+    dcell0=300e-6
+    fstrut0=0.8
+    T0=283
+    xCO20=0.0
+    xCyP0=0.99
+    xAir0=0.0
+# set initial points so that they are close to one value
 def setIP(a0):
     a=[]
     for i in xrange(4):
@@ -219,7 +209,38 @@ initialPoints_foamConductivity_auto = {
     'x[O2]': setIP(xAir0*0.21),
     'x[N2]': setIP(xAir0*0.79),
 }
-
+# when testing,
+# initialize for any composition to avoid getting out of bounds too many times
+test=False
+if test:
+    initialPoints_foamConductivity_auto['x[CO2]']=[1,0,0,0]
+    initialPoints_foamConductivity_auto['x[CyP]']=[0,1,0,0]
+    initialPoints_foamConductivity_auto['x[O2]']=[0,0,1,0]
+    initialPoints_foamConductivity_auto['x[N2]']=[0,0,0,1]
+# When initializing for Foam expansion
+# use dummy data to initialize to avoid getting out of bounds
+foaming_ini={
+    'eps': [0.9,0.0,0.96,0.99,0.7,0.5],
+    'dcell': [200e-6,0.0,300e-6,100e-6,1e-2,200e-6],
+    'fstrut': [0.0,1.0,0.7,0.6,0.0,0.9],
+    'T': [280,549,300,350,330,300],
+    'x[CO2]': [0,0,1,1,1,0],
+    'x[CyP]': [1,1,0,0,0,1],
+    'x[O2]': [0,0,0,0,0,0],
+    'x[N2]': [0,0,0,0,0,0],
+}
+# we are initializing for Foam expansion if unifiedInput.json exists
+try:
+    with open('inputs/unifiedInput.json','r') as f:
+        inputs=json.load(f)
+    initialPoints_foamConductivity_auto = foaming_ini
+except IOError:
+    try:
+        with open('../inputs/unifiedInput.json','r') as f:
+            inputs=json.load(f)
+        initialPoints_foamConductivity_auto = foaming_ini
+    except:
+        pass
 ## Surrogate model for foam conductivity
 #
 # Backward mapping model is used.

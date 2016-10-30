@@ -9,7 +9,7 @@
    o8o        o888o `Y8bod8P' o888bood8P'   `Y8bod8P' o8o        `8  `Y888""8o
 
 Copyright
-    2014-2015 MoDeNa Consortium, All rights reserved.
+    2014-2016 MoDeNa Consortium, All rights reserved.
 
 License
     This file is part of Modena.
@@ -21,8 +21,8 @@ License
 
     Modena is distributed in the hope that it will be useful, but WITHOUT ANY
     WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-    FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-    for more details.
+    FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+    details.
 
     You should have received a copy of the GNU General Public License along
     with Modena.  If not, see <http://www.gnu.org/licenses/>.
@@ -30,7 +30,6 @@ License
 
 """
 @file
-Python library of FireTasks
 This is the Surface Tension python module. Basically, it contains the following:
 
 The FireTask which controls the call of the detailed model. This detailed model is called
@@ -57,25 +56,14 @@ surrogate model parameters.
 
 
 @author    Jonas Mairhofer
-@copyright 2014-2015, MoDeNa Project. GNU Public License.
+@copyright 2014-2016, MoDeNa Project. GNU Public License.
 @ingroup   app_foaming
 """
 
 import os
-import modena
-from modena import ForwardMappingModel, BackwardMappingModel, SurrogateModel, CFunction, IndexSet, ModenaFireTask
-import modena.Strategy as Strategy
-from fireworks import Firework, Workflow, FWAction
+from modena import *
 from fireworks.utilities.fw_utilities import explicit_serialize
 from jinja2 import Template
-
-
-__author__ = 'Henrik Rusche'
-__copyright__ = 'Copyright 2014, MoDeNa Project'
-__version__ = '0.2'
-__maintainer__ = 'Henrik Rusche'
-__email__ = 'h.rusche@wikki.co.uk.'
-__date__ = 'Sep 4, 2014'
 
 
 blowing_agents = IndexSet(
@@ -85,7 +73,7 @@ blowing_agents = IndexSet(
 
 monomers = IndexSet(
     name = 'monomers',
-    names = ['PU', 'THF', 'HEXANE']
+    names = ['PU', 'THF', 'HEXANE', 'surfactant']
 )
 
 
@@ -114,12 +102,11 @@ class SurfaceTensionExactSim(ModenaFireTask):
         run_command = os.path.dirname(os.path.abspath(__file__))+'/src/PCSAFT_SurfaceTension -snes_monitor_short -ksp_monitor_short \
                    -nx 800 -rc 9.0 -box 300 -erel 1e-08 -init_pert 0 \
                    -snes_type newtonls  -snes_converged_reason  \
-                   -snes_atol 1e-07 -snes_rtol 1e-07 -snes_stol 1e-07 -snes_max_it 20 \
-                   -ksp_max_it 15 -ksp_gmres_restart 50 \
+                   -snes_atol 1e-07 -snes_rtol 1e-07 -snes_stol 1e-07 -snes_max_it 15 \
+                   -ksp_max_it 10 -ksp_gmres_restart 50 \
                    -snes_linesearch_type l2 -snes_linesearch_damping 0.3 -snes_linesearch_monitor \
                    -snes_max_fail 1 -snes_max_linear_solve_fail 100 \
                    -ksp_gmres_cgs_refinement_type refine_always \
-                   -snes_ksp_ew -snes_ksp_ew_version 1 -snes_ksp_ew_rtol0 0.5 -snes_ksp_ew_rtolmax 0.9 -snes_ksp_ew_threshold 0.1 \
                    -jac 0 -pc_type none > log'
 
 
@@ -162,7 +149,8 @@ class SurfaceTensionExactSim(ModenaFireTask):
             pass
 
     def analyse_output(self):
-        """Method analysing the output of the file.
+        """Method        'A' : blowing_agents,
+        'B' : monomers analysing the output of the file.
              @TODO consider adding check for empty file
         """
         with open('out.txt', 'r') as FILE:
@@ -194,7 +182,7 @@ outputs[0] = P0 + T*P1 + P2*T*T;
 ''',
     # These are global bounds for the function
     inputs={
-        'T': { 'min': 270.0, 'max': 310.0 },        #check if boundaries reasonable, from this range, the random values for the DOE are chosen!
+        'T': { 'min': 270.0, 'max': 550.0 },        #check if boundaries reasonable, from this range, the random values for the DOE are chosen!
     },
     outputs={
         'ST': { 'min': 9e99, 'max': -9e99, 'argPos': 0 },
@@ -206,7 +194,7 @@ outputs[0] = P0 + T*P1 + P2*T*T;
     },
     species = {
         'A' : blowing_agents,
-        'B' : monomers
+        'B' : monomers,
     }
 )
 
@@ -218,7 +206,7 @@ m = BackwardMappingModel(
     initialisationStrategy= Strategy.InitialPoints(
         initialPoints=
         {
-            'T': [270.0, 290.0, 300.0],
+            'T': [270.0, 290.0, 330.0],
         },
     ),
     outOfBoundsStrategy= Strategy.ExtendSpaceStochasticSampling(
@@ -226,7 +214,7 @@ m = BackwardMappingModel(
     ),
     parameterFittingStrategy= Strategy.NonLinFitWithErrorContol(
         testDataPercentage= 0.2,
-        maxError= 30.0,
+        maxError= 1e-2,
         improveErrorStrategy= Strategy.StochasticSampling(
             nNewPoints= 2
         ),
@@ -235,14 +223,14 @@ m = BackwardMappingModel(
 )
 
 m2 = BackwardMappingModel(
-    _id= 'SurfaceTension[A=CO2,B=PU]',
+    _id= 'SurfaceTension[A=AIR,B=PU]',
     surrogateFunction= f,
     exactTask= SurfaceTensionExactSim(),
     substituteModels= [ ],
     initialisationStrategy= Strategy.InitialPoints(
         initialPoints=
         {
-            'T': [270.0, 290.0, 300.0],
+            'T': [340.0, 350.0, 360.0, 371.0, 380.0],
         },
     ),
     outOfBoundsStrategy= Strategy.ExtendSpaceStochasticSampling(
@@ -250,10 +238,11 @@ m2 = BackwardMappingModel(
     ),
     parameterFittingStrategy= Strategy.NonLinFitWithErrorContol(
         testDataPercentage= 0.2,
-        maxError= 30.0,
+        maxError= 1e-0,
         improveErrorStrategy= Strategy.StochasticSampling(
             nNewPoints= 2
         ),
         maxIterations= 5 # Currently not used
     ),
 )
+

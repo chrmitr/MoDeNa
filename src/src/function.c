@@ -9,7 +9,7 @@
    o8o        o888o `Y8bod8P' o888bood8P'   `Y8bod8P' o8o        `8  `Y888""8o
 
 Copyright
-    2014-2015 MoDeNa Consortium, All rights reserved.
+    2014-2016 MoDeNa Consortium, All rights reserved.
 
 License
     This file is part of Modena.
@@ -49,10 +49,9 @@ void modena_function_load_library(modena_function_t* self)
 
     if(!self->handle)
     {
-        fprintf
+        Modena_Error_Print
         (
-           stderr,
-           "lt_dlopen: Could not open library %s\nlt_dlopen: %s\n",
+           "lt_dlopen: Could not open library %s\nlt_dlopen: %s",
            PyString_AsString(pLibraryName),
            lt_dlerror()
         );
@@ -62,10 +61,9 @@ void modena_function_load_library(modena_function_t* self)
     self->function = lt_dlsym(self->handle, PyString_AsString(pFunctionName));
     if(!self->function)
     {
-        fprintf
+        Modena_Error_Print
         (
-            stderr,
-            "lt_dlsym: Could not find function %s in library %s\n"
+            "lt_dlsym: Could not find function %s in library %s"
             "lt_dlsym: %s",
             PyString_AsString(pFunctionName),
             PyString_AsString(pLibraryName),
@@ -143,7 +141,7 @@ modena_function_t *modena_function_new
 
     if(lt_dlinit())
     {
-        fprintf(stderr, "lt_dlinit: %s\n", lt_dlerror());
+        Modena_Error_Print("lt_dlinit: %s", lt_dlerror());
         exit(1);
     }
 
@@ -161,7 +159,7 @@ modena_function_t *modena_function_new_from_model
 
     if(lt_dlinit())
     {
-        fprintf(stderr, "lt_dlinit: %s\n", lt_dlerror());
+        Modena_Error_Print("lt_dlinit: %s", lt_dlerror());
         exit(1);
     }
 
@@ -209,6 +207,8 @@ modena_index_set_t *modena_function_get_index_set
     return (modena_index_set_t *) pNewObj;
 }
 
+/* Destructor, deallocates the memory block occupied by a surrogate function
+ */
 void modena_function_destroy(modena_function_t *self)
 {
     lt_dlclose(self->handle);
@@ -217,19 +217,51 @@ void modena_function_destroy(modena_function_t *self)
     free(self);
 }
 
+/* C-Python: Destructor, exposed as the __del__ method in Python.
+ */
 static void modena_function_t_dealloc(modena_function_t* self)
 {
     modena_function_destroy(self);
 }
 
+/* C-Python: Member-Table
+ *
+ * Structure which describes an attribute of a type which corresponds to a C
+ * struct member. Its fields are:
+ *
+ * Field  C Type       Meaning
+ * ------ ----------  --------------------------------------------------------
+ * name   char *      name of the member
+ * type   int         the type of the member in the C struct
+ * offset Py_ssize_t  the offset in bytes that the member is located on the
+ *                    type's object struct
+ * flags  int         flag bits indicating if the field should be read-only or 
+ *                    writable
+ * doc    char *      points to the contents of the docstring
+ */
 static PyMemberDef modena_function_t_members[] = {
     {NULL}  /* Sentinel */
 };
 
+/* C-Python: Method-Table
+ *
+ * Structure used to describe a method of an extension type. This structure has
+ * four fields:
+ *
+ * Field     C Type       Meaning
+ * -------   -----------  ----------------------------------------------------
+ * ml_name   char *       name of the method
+ * ml_meth   PyCFunction  pointer to the C implementation
+ * ml_flags  int          flag bits indicating how the call should be
+ *                        constructed
+ * ml_doc    char *       points to the contents of the docstring
+ */
 static PyMethodDef modena_function_t_methods[] = {
     {NULL}  /* Sentinel */
 };
 
+/* C-Python: Initialiser, exposed in Python as the method: __init__
+ */
 static int modena_function_t_init
 (
    modena_function_t *self,
@@ -292,6 +324,8 @@ static int modena_function_t_init
     return 0;
 }
 
+/* C-Python: Constructor, exposed in Python as the method: __new__
+ */
 static PyObject *modena_function_t_new
 (
     PyTypeObject *type,
@@ -311,6 +345,8 @@ static PyObject *modena_function_t_new
     return (PyObject *)self;
 }
 
+/* C-Python: The C structure used to describe the modena_model type.
+ */
 PyTypeObject modena_function_tType = {
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
