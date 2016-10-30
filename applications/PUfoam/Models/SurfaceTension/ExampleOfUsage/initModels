@@ -40,21 +40,18 @@ Contributors
 '''
 
 from modena import SurrogateModel
-from modena.Strategy import Workflow2
-#import flowRate
 import modSurfaceTension
-from fireworks import LaunchPad
+from fireworks import LaunchPad, Workflow
 from fireworks.core.rocket_launcher import rapidfire
-from fireworks.utilities.fw_serializers import load_object
 
 
 # set up the LaunchPad and reset it
 launchpad = LaunchPad()
 launchpad.reset('', require_password=False)
 
-initWfs = Workflow2([])
+initWfs = Workflow([])
 for m in SurrogateModel.get_instances():
-    initWfs.addNoLink(m.initialisationStrategy().workflow(m))
+    initWfs.append_wf(m.initialisationStrategy().workflow(m), [])
 
 # store workflow and launch it locally
 launchpad.add_wf(initWfs)

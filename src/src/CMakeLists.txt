@@ -1,6 +1,6 @@
 # Build C library
 
-file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h ${CMAKE_CURRENT_SOURCE_DIR}/*.H)
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
 
 add_library(modena SHARED ${SOURCES})
@@ -52,7 +52,7 @@ configure_file(
 )
 
 # Installation
-if(CMAKE_VERSION VERSION_GREATER "2.8.11")
+if(CMAKE_VERSION VERSION_GREATER "2.8.12")
   install(
     TARGETS twoTanksFullProblem modena fmodena
     EXPORT MODENATargets
